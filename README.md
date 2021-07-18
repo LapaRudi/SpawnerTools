@@ -11,4 +11,4 @@ Man bekommt Spawner + SpawnEi ins Inventar
 + Anzahl der gespawnten Mobs (Statistik)
 + Essentials /Spawner support
 + Spawner sind gegen Explosionen geschützt
-+ Andere Spieler (ohne bypass Permission) können mit deinem Spawner nicht interagieren
++ Andere Spieler (ohne bypass Permission) können mit deinen Spawnern nicht interagieren
