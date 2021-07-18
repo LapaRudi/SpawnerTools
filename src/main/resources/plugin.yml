@@ -1,0 +1,11 @@
+name: SpawnerTools
+version: 0.2.1
+main: de.laparudi.spawnertools.SpawnerTools
+author: LapaRudi
+description: Vereinfach den Umgang mit Spawnern
+softdepend:
+  - PlotSquared
+  - Essentials
+commands: 
+  spawnertools:
+    aliases: [st, stools]
