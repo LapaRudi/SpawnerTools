@@ -2,16 +2,21 @@ package de.laparudi.spawnertools.util;
 
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteStreams;
-import com.intellectualcrafters.plot.api.PlotAPI;
+import com.plotsquared.core.location.Location;
+import com.plotsquared.core.plot.Plot;
 import de.laparudi.spawnertools.SpawnerTools;
-import org.apache.commons.lang3.text.WordUtils;
+import de.laparudi.spawnertools.util.items.ItemManager;
+import net.md_5.bungee.api.chat.ComponentBuilder;
+import net.md_5.bungee.api.chat.HoverEvent;
+import net.md_5.bungee.api.chat.hover.content.Text;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 
+import javax.annotation.Nonnull;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -20,99 +25,114 @@ import java.util.UUID;
 
 public class SpawnerUtil implements PluginMessageListener {
     
-    public String toMySQLString(Location location) {
-        return location.getWorld().getName() + " " + location.getBlockX() + " " + location.getBlockY() + " " + location.getBlockZ();
-    }
- 
-    public Location fromMySQLString(String string) {
-        String[] values = string.split(" ");
-        return new Location(Bukkit.getWorld(values[0]), Double.parseDouble(values[1]), Double.parseDouble(values[2]), Double.parseDouble(values[3]));
+    private final ItemManager manager = SpawnerTools.getPlugin().getManager();
+    
+    public ItemStack itemInHand(final Player player) {
+        if (Bukkit.getBukkitVersion().contains("1.8.8")) {
+            return player.getItemInHand();
+        }
+        
+        return player.getInventory().getItemInMainHand();
     }
     
-    public String toTypeString(String type) {
-        return WordUtils.capitalize(type.toLowerCase().replace('_', ' '));
+    public HoverEvent getHoverEvent(final String text) {
+        if (SpawnerTools.getPlugin().isOutdated()) {
+            return new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder(text).create());
+        }
+        
+        return new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(text));
     }
     
-    public boolean canHold(Player player) {
+    public boolean canHold(final Player player) {
         int space = 0;
-        for(int i = 0; i < player.getInventory().getSize(); i++) {
-            if(player.getInventory().getItem(i) == null) {
+        for (int i = 0; i < player.getInventory().getSize(); i++) {
+            if (player.getInventory().getItem(i) == null) {
                 space++;
             }
         }
         return space >=2;
     }
     
-    public void openSpawnerGUI(Player player, Location location) {
-        MySQL mySQL = SpawnerTools.getPlugin().getMySQL();
-        UUID uuid = UUID.fromString(mySQL.getValue(location, "UUID"));
-        String name = Bukkit.getOfflinePlayer(uuid).getName();
-        String spawns = NumberFormat.getNumberInstance().format(mySQL.getIntValue(location, "Spawns"));
-        String type = mySQL.getValue(location, "Type");
+    private Location toPlotLocation(final org.bukkit.Location location) {
+        if (location == null || location.getWorld() == null) return null;
+        return Location.at(location.getWorld().getName(), location.getBlockX(), location.getBlockY(), location.getBlockZ(), location.getYaw(),location.getPitch());
+    }
+    
+    public void openSpawnerGUI(final Player player, final Block spawner) {
+        final org.bukkit.Location bukkitLocation = spawner.getLocation();
+        final MySQL mySQL = SpawnerTools.getPlugin().getMySQL();
+        final UUID owner = UUID.fromString(mySQL.getValue(bukkitLocation, "UUID"));
+        final String name = Bukkit.getOfflinePlayer(owner).getName();
+        final String spawns = NumberFormat.getNumberInstance().format(mySQL.getIntValue(bukkitLocation, "Spawns"));
+        final String type = mySQL.getValue(bukkitLocation, "Type");
         
-        Inventory spawnerInventory = Bukkit.createInventory(null, 27, "§0Spawner");
-        spawnerInventory.setItem(11, new ItemBuilder(Material.SKULL_ITEM).setDurability(3).setName("§3Besitzer").setLore("", "§7» §bDieser Spawner gehört §3" + name + "§b.", "").setSkullOwner(name).toItemStack());
-
-        if (player.getUniqueId().equals(uuid)) {
-            spawnerInventory.setItem(13, new ItemBuilder(Material.EMERALD).setName("§3Spawner abbauen").setLore("", "§7» §bWenn du deinen Spawner abbaust, bekommst du", "§7» §bden Spawner und das SpawnEi in dein Inventar.", "").addFlag().toItemStack());
+        final Inventory spawnerInventory = Bukkit.createInventory(null, 27, "§0Spawner");
+        spawnerInventory.setItem(11, SpawnerTools.getPlugin().getManager().CUSTOM_HEAD(name));
+        
+        if (player.getUniqueId().compareTo(owner) == 0) {
+            spawnerInventory.setItem(13, manager.REMOVE_OK);
         } else
-            spawnerInventory.setItem(13, new ItemBuilder(Material.REDSTONE).setName("§3Spawner abbauen").setLore("", "§7» §cNur der Besitzer des Spawners kann ihn abbauen.", "").toItemStack());
-
-        spawnerInventory.setItem(15, new ItemBuilder(Material.BOOK).setName("§3Statisiken").setLore("", "§7» §3Mob: §b" + toTypeString(type), "§7» §3Spawns: §b" + spawns, "§7» §3Location: §b" + toMySQLString(location), "").toItemStack());
+            spawnerInventory.setItem(13, manager.REMOVE_BLOCKED);
+        
+        spawnerInventory.setItem(15, manager.SPAWNER_STATS(type, spawns, bukkitLocation));
 
         for (int i = 0; i < spawnerInventory.getSize(); i++) {
-            if (spawnerInventory.getItem(i) == null) {
-                spawnerInventory.setItem(i, new ItemBuilder(Material.STAINED_GLASS_PANE).setDurability(7).setName(" ").toItemStack());
-            }
+            if (spawnerInventory.getItem(i) != null) continue;
+            spawnerInventory.setItem(i, manager.GRAY_GLASS);
         }
         
-        if(SpawnerTools.getPlugin().getPlotSquared()) {
-            PlotAPI api = new PlotAPI();
-            if (api.getPlot(location) != null) {
-                boolean isTrusted = api.getPlot(location).isOwner(player.getUniqueId()) || api.getPlot(location).getTrusted().contains(player.getUniqueId()) || api.getPlot(location).getMembers().contains(player.getUniqueId());
+        if (SpawnerTools.getPlugin().getPlotSquared()) {
+            final UUID uuid = player.getUniqueId();
+            final Location location = this.toPlotLocation(bukkitLocation);
+            final Plot plot = Plot.getPlot(location);
+
+            if (plot != null) {
+                boolean isTrusted = plot.isOwner(uuid) || plot.getTrusted().contains(uuid) || plot.getMembers().contains(uuid);
                 
                 // Dem Spieler gehört nicht der Spawner aber er ist Plot-Besitzer
-                if (!player.getUniqueId().equals(uuid) && api.getPlot(location).isOwner(player.getUniqueId())) {
-                        spawnerInventory.setItem(13, new ItemBuilder(Material.EMERALD).setName("§3Spawner abbauen").setLore("", "§7» §bWenn du deinen Spawner abbaust, bekommst du", "§7» §bden Spawner und das SpawnEi in dein Inventar.", "", "§7» §9Weil du der Plot-Besitzer bist,", "§7» §9kannst du den Spawner abbauen.", "").addFlag().toItemStack());
+                if (uuid != owner && plot.isOwner(uuid)) {
+                        spawnerInventory.setItem(13, manager.REMOVE_PLOT_OWNER);
                         
                 // Dem Spieler gehört der Spawner und er hat Trust        
-                } else if(player.getUniqueId().equals(uuid) && isTrusted) {
-                    spawnerInventory.setItem(13, new ItemBuilder(Material.EMERALD).setName("§3Spawner abbauen").setLore("", "§7» §bWenn du deinen Spawner abbaust, bekommst du", "§7» §bden Spawner und das SpawnEi in dein Inventar.", "", "§7» §9Weil dieser Spawner dir gehört, und du auf diesem", "§7» §9Grundstück vertraut bist kannst du den Spawner abbauen.", "").addFlag().toItemStack());
+                } else if (uuid == owner && isTrusted) {
+                    spawnerInventory.setItem(13, manager.REMOVE_TRUSTED);
                 
                 // Dem Spieler gehört der Spawner aber er hat kein Trust        
-                } else if(player.getUniqueId().equals(uuid) && !isTrusted) {
-                    spawnerInventory.setItem(13, new ItemBuilder(Material.REDSTONE).setName("§3Spawner abbauen").setLore("", "§7» §cAuch wenn dieser Spawner dir gehört,", "§7» §cdarfst du ihn nur abbauen, wenn du", "§7» §cauf diesem Grundstück vertraut bist.", "").toItemStack());
+                } else if (uuid == owner) {
+                    spawnerInventory.setItem(13, manager.REMOVE_NOTRUST);
                 }
             }
         }
-        Bukkit.getScheduler().runTaskLater(SpawnerTools.getPlugin(), () -> 
-                player.openInventory(spawnerInventory), 2);
+        
+        Bukkit.getScheduler().runTaskLater(SpawnerTools.getPlugin(), () -> player.openInventory(spawnerInventory), 2);
     }
 
-    public void sendServerName(Player player) {
-        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
-             DataOutputStream stream = new DataOutputStream(out)) {
+    public void sendServerName(final Player player) {
+        try (final ByteArrayOutputStream out = new ByteArrayOutputStream();
+             final DataOutputStream stream = new DataOutputStream(out)) {
 
             stream.writeUTF("GetServer");
             player.sendPluginMessage(SpawnerTools.getPlugin(), "BungeeCord", out.toByteArray());
 
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (final IOException exception) {
+            exception.printStackTrace();
         }
     }
 
     @Override
-    public void onPluginMessageReceived(String channel, Player player, byte[] message) {
+    public void onPluginMessageReceived(final String channel, @Nonnull final Player player, @Nonnull final byte[] message) {
         if (!channel.equals("BungeeCord")) {
             return;
         }
-        ByteArrayDataInput in = ByteStreams.newDataInput(message);
-        String subchannel = in.readUTF();
+        
+        final ByteArrayDataInput in = ByteStreams.newDataInput(message);
+        final String subchannel = in.readUTF();
 
         if (subchannel.equals("GetServer")) {
-            String server = in.readUTF();
-            SpawnerTools.getPlugin().setServerName(server);
-            SpawnerTools.getPlugin().getMySQL().setUpdate("CREATE TABLE IF NOT EXISTS `SpawnerTools_" + server + "` (`Location` VARCHAR(64) UNIQUE, `UUID` CHAR(36), `Type` VARCHAR(32), `Spawns` INT)");
+            final String server = in.readUTF();
+            SpawnerTools.getPlugin().setServerName("spawnertools_" + server);
+            SpawnerTools.getPlugin().getMySQL().setUpdate("CREATE TABLE IF NOT EXISTS `" + SpawnerTools.getPlugin().getServerName() + "` (`Location` VARCHAR(64) UNIQUE, `UUID` CHAR(36), `Type` VARCHAR(32), `Spawns` INT)");
+            SpawnerTools.getPlugin().edited = true;
         }
     }
 }

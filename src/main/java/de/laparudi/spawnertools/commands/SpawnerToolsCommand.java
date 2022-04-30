@@ -3,176 +3,198 @@ package de.laparudi.spawnertools.commands;
 import de.laparudi.spawnertools.SpawnerTools;
 import de.laparudi.spawnertools.util.MySQL;
 import de.laparudi.spawnertools.util.UUIDFetcher;
+import net.md_5.bungee.api.ChatColor;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.ComponentBuilder;
-import net.md_5.bungee.api.chat.HoverEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.util.StringUtil;
+import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
-public class SpawnerToolsCommand implements CommandExecutor {
-    
+public class SpawnerToolsCommand implements CommandExecutor, TabCompleter {
+
     private final List<UUID> cooldown = new ArrayList<>();
     private final MySQL mySQL = SpawnerTools.getPlugin().getMySQL();
-    private final String prefix = SpawnerTools.getPlugin().prefix;
+    private final String prefix = SpawnerTools.getPlugin().getPrefix();
+    private final ChatColor color = SpawnerTools.getPlugin().getColor();
 
-    private void sendHelp(CommandSender sender) {
+    private void sendHelp(final CommandSender sender) {
         sender.sendMessage("");
-        sender.sendMessage(prefix + "§3SpawnerTools §bv" + SpawnerTools.getPlugin().getDescription().getVersion() + "§3 von §bLapaRudi");
+        sender.sendMessage(prefix + "§3SpawnerTools " + color + "v" + SpawnerTools.getPlugin().getDescription().getVersion() + "§3 von " + color + "LapaRudi");
         sender.sendMessage("");
-        sender.sendMessage(prefix + "§b/spawnertools list §7[§bSpieler§7]");
-        sender.sendMessage(prefix + "§b/spawnertools tp §7<§bWelt§7> <§bX§7> <§bY§7> <§bZ§7>");
+        sender.sendMessage(prefix + color + "/spawnertools list §7[" + color + "Spieler§7]");
+        sender.sendMessage(prefix + color + "/spawnertools tp §7<" + color + "Welt§7> <" + color + "X§7> <" + color + "Y§7> <" + color + "Z§7>");
         sender.sendMessage("");
     }
     
+    private void showList(final CommandSender sender, final UUID uuid) {
+        final String split = sender instanceof Player ? "▏" : "|";
+        final List<String> locations = mySQL.getListValue(uuid, "Location");
+        final List<String> types = mySQL.getListValue(uuid, "Type");
+        final List<String> spawns = mySQL.getListValue(uuid, "Spawns");
+
+        if (locations.isEmpty()) {
+            final String message = sender.getName().equals(UUIDFetcher.getName(uuid)) ?
+                    "§cDu hast noch keine Spawner platziert." : "§cDieser Spieler hat noch keine Spawner platziert.";
+            
+            sender.sendMessage(prefix + message);
+            return;
+        }
+
+        sender.sendMessage("");
+        sender.sendMessage(prefix + color + "Spawnerliste von §c" + UUIDFetcher.getName(uuid) + "§7 (§3" + locations.size() + "§7)");
+        sender.sendMessage(prefix + "§7<" + color + "Welt§7> <" + color + "X§7> <" + color + "Y§7> <" + color + "Z§7> <" + color + "Mob§7> <" + color + "Spawns§7>");
+        sender.sendMessage("");
+
+        for (int i = 0; i < locations.size(); i++) {
+            final String spawner = prefix + color + locations.get(i) + "§7 " + split + " " + color +
+                    SpawnerTools.getPlugin().getManager().toMobString(types.get(i)) + "§7 " + split + " " + color + spawns.get(i) + " ";
+
+            final ComponentBuilder builder = SpawnerTools.getPlugin().isOutdated() ? new ComponentBuilder(prefix) :
+                    new ComponentBuilder("[").color(ChatColor.of("#3e5556"))
+                            .append("S").color(ChatColor.of("#02a0a6")).append("p").color(ChatColor.of("#00abb7")).append("a").color(ChatColor.of("#00b6c8"))
+                            .append("w").color(ChatColor.of("#00c2da")).append("n").color(ChatColor.of("#00cdec")).append("er").color(ChatColor.of("#00d8ff"))
+                            .append("T").color(ChatColor.of("#00cdec")).append("o").color(ChatColor.of("#00c2da")).append("o").color(ChatColor.of("#00b6c8"))
+                            .append("l").color(ChatColor.of("#00abb7")).append("s").color(ChatColor.of("#02a0a6")).append("] ").color(ChatColor.of("#3e5556"));
+
+            builder.append(locations.get(i)).color(color)
+                    .append(" ").append(split).color(ChatColor.GRAY).append(" ")
+                    .append(SpawnerTools.getPlugin().getManager().toMobString(types.get(i))).color(color)
+                    .append(" ").append(split).color(ChatColor.GRAY).append(" ")
+                    .append(spawns.get(i)).color(color).append("§7 [§3TP§7]")
+                    .event(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/spawnertools tp " + locations.get(i)))
+                    .event(SpawnerTools.getPlugin().getUtil().getHoverEvent("§aTeleportiere dich zu diesem Spawner"));
+
+            if (sender instanceof Player) {
+                ((Player) sender).spigot().sendMessage(builder.create());
+            } else
+                sender.sendMessage(spawner);
+        }
+
+        sender.sendMessage("");
+    }
+
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String s, String[] args) {
-        if(args.length == 0) {
-            sendHelp(sender);
-            return true;
-
-        } else if(args.length == 1) {
-            if (!(sender instanceof Player)) {
-                sender.sendMessage(prefix + "§cBenutze /spawnertools list <Spieler>");
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String s, String[] args) {
+        switch (args.length) {
+            case 0:
+                this.sendHelp(sender);
                 return true;
-            }
-            Player player = (Player) sender;
 
-            if (args[0].equalsIgnoreCase("list")) {
-                UUID uuid = player.getUniqueId();
-                List<String> locations = mySQL.getListValue(uuid, "Location");
-                List<String> types = mySQL.getListValue(uuid, "Type");
-                List<String> spawns = mySQL.getListValue(uuid, "Spawns");
-
-                if (locations.isEmpty()) {
-                    player.sendMessage(prefix + "§cDu hast noch keine Spawner platziert.");
+            case 1:
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage(prefix + "§cBenutze /spawnertools list <Spieler>");
                     return true;
                 }
 
-                player.sendMessage("");
-                player.sendMessage(prefix + "§bSpawnerliste von §3" + player.getName() + "§7 (§9" + locations.size() + "§7)");
-                player.sendMessage(prefix + "§7<§bWelt§7> <§bX§7> <§bY§7> <§bZ§7> <§bMob§7> <§bSpawns§7>");
-                player.sendMessage("");
+                Player player = (Player) sender;
 
-                for (int i = 0; i < locations.size(); i++) {
-                    String spawner = prefix + "§b" + locations.get(i) + "§7 ▏ §b" + SpawnerTools.getPlugin().getUtil().toTypeString(types.get(i)) + "§7 ▏ §b" + spawns.get(i) + " ";
-                    ComponentBuilder builder = new ComponentBuilder(spawner).append("§7[§3TP§7]").event(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/st tp " +
-                            locations.get(i))).event(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder("§aTeleportiere dich zu diesem Spawner").create()));
-                    player.spigot().sendMessage(builder.create());
-                }
-                player.sendMessage("");
-                
-            } else if(args[0].equalsIgnoreCase("tp")) {
-                sender.sendMessage(prefix + "§b/spawnertools tp §7<§bWelt§7> <§bX§7> <§bY§7> <§bZ§7>");
-                
-            } else
-                sendHelp(sender);
-            
-        } else if(args.length == 2) {
-            if(args[0].equalsIgnoreCase("list")) {
-                if (!sender.hasPermission("spawnertools.list.other")) {
-                    sender.sendMessage(prefix + "§cDas darfst du nicht.");
-                    return true;
-                }
+                if (args[0].equalsIgnoreCase("list")) {
+                    this.showList(sender, player.getUniqueId());
 
-                String split = sender instanceof Player ? "▏" : "|";
-                
-                UUID targetUUID = UUIDFetcher.getUUID(args[1]);
-                if(targetUUID == null) {
-                    sender.sendMessage(prefix + "§cDieser Spieler wurde nicht gefunden.");
-                    return true;
-                }
-                
-                OfflinePlayer target = Bukkit.getOfflinePlayer(targetUUID);
-                if(!target.hasPlayedBefore() && !target.isOnline()) {
-                    sender.sendMessage(prefix + "§cDieser Spieler wurde nicht gefunden.");
-                    return true;
-                }
+                } else if (args[0].equalsIgnoreCase("tp")) {
+                    sender.sendMessage(prefix + color + "/spawnertools tp §7<" + color + "Welt§7> <" + color + "X§7> <" + color + "Y§7> <" + color + "Z§7>");
 
-                List<String> locations = mySQL.getListValue(targetUUID, "Location");
-                List<String> types = mySQL.getListValue(targetUUID, "Type");
-                List<String> spawns = mySQL.getListValue(targetUUID, "Spawns");
-
-                if (locations == null || locations.isEmpty()) {
-                    sender.sendMessage(prefix + "§4" + target.getName() + "§c hat noch keine Spawner platziert.");
-                    return true;
-                }
+                } else
+                    this.sendHelp(sender);
                 
-                sender.sendMessage("");
-                sender.sendMessage(prefix + "§bSpawnerliste von §3" + target.getName() + "§7 (§9" + locations.size() + "§7)");
-                sender.sendMessage(prefix + "§7<§bWelt§7> <§bX§7> <§bY§7> <§bZ§7> <§bMob§7> <§bSpawns§7>");
-                sender.sendMessage("");
+                break;
 
-                for (int i = 0; i < locations.size(); i++) {
-                    String spawner = prefix + "§b" + locations.get(i) + "§7 " + split + " §b" + SpawnerTools.getPlugin().getUtil().toTypeString(types.get(i)) + "§7 " + split + " §b" + spawns.get(i) + " ";
-                    ComponentBuilder builder = new ComponentBuilder(spawner).append("§7[§3TP§7]").event(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/st tp " +
-                            locations.get(i))).event(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder("§aTeleportiere dich zu diesem Spawner").create()));
-                    
-                    if(sender instanceof Player) {
-                        ((Player) sender).spigot().sendMessage(builder.create());
-                    } else
-                        sender.sendMessage(spawner);
-                }
-                sender.sendMessage("");
-                
-            } else if(args[0].equalsIgnoreCase("tp")) {
-                sender.sendMessage(prefix + "§b/spawnertools tp §7<§bWelt§7> <§bX§7> <§bY§7> <§bZ§7>");
-
-            } else
-                sendHelp(sender);
-            
-        } else if(args.length == 5) {
-            if (!(sender instanceof Player)) {
-                return true;
-            }
-            Player player = (Player) sender;
-            
-            if(args[0].equalsIgnoreCase("tp")) {
-                if(Bukkit.getWorld(args[1]) == null) {
-                    player.sendMessage(prefix + "§cDiese Welt existiert nicht.");
-                    return true;
-                }
-                
-                if(cooldown.contains(player.getUniqueId())) {
-                    player.sendMessage(prefix + "§cBitte warte einen Moment.");
-                    return true;
-                }
-                
-                try {
-                    Location location = new Location(Bukkit.getWorld(args[1]), Double.parseDouble(args[2]), Double.parseDouble(args[3]), Double.parseDouble(args[4]), player.getLocation().getYaw(), player.getLocation().getPitch());
-
-                    if (!mySQL.spawnerExists(location)) {
-                        player.sendMessage(prefix + "§cDieser Spawner existiert nicht mehr.");
-                        return true;
-                    }
-                    if (!mySQL.getValue(location, "UUID").equals(player.getUniqueId().toString()) && !player.hasPermission("spawnertools.bypass.tp")) {
-                        player.sendMessage(prefix + "§cDieser Spawner gehört dir nicht.");
+            case 2:
+                if (args[0].equalsIgnoreCase("list")) {
+                    if (!sender.hasPermission("spawnertools.list.other")) {
+                        sender.sendMessage(prefix + "§cDu darfst nur deine eigene Liste ansehen.");
                         return true;
                     }
                     
-                    cooldown.add(player.getUniqueId());
-                    player.teleport(location.add(0.5, 1, 0.5));
-                    player.setNoDamageTicks(200);
-                    player.sendMessage(prefix + "§bDu wurdest teleportiert.");
+                    final UUID targetUUID = UUIDFetcher.getUUID(args[1]);
+
+                    if (targetUUID == null) {
+                        sender.sendMessage(prefix + "§cDieser Spieler wurde nicht gefunden.");
+                        return true;
+                    }
                     
-                    Bukkit.getScheduler().runTaskLater(SpawnerTools.getPlugin(), () ->
-                            cooldown.remove(player.getUniqueId()), 100);
-                    
-                } catch (NumberFormatException e) {
-                    player.sendMessage(prefix + "§cUngültige Koordinaten.");
+                    this.showList(sender, targetUUID);
+
+                } else if (args[0].equalsIgnoreCase("tp")) {
+                    sender.sendMessage(prefix + "§b/spawnertools tp §7<§bWelt§7> <§bX§7> <§bY§7> <§bZ§7>");
+
+                } else
+                    this.sendHelp(sender);
+                
+                break;
+
+            case 5:
+                if (!(sender instanceof Player)) {
+                    return true;
                 }
-            }
-        } else
-            sendHelp(sender);
-        
+                
+                player = (Player) sender;
+
+                if (args[0].equalsIgnoreCase("tp")) {
+                    if (Bukkit.getWorld(args[1]) == null) {
+                        player.sendMessage(prefix + "§cDiese Welt existiert nicht.");
+                        return true;
+                    }
+
+                    if (cooldown.contains(player.getUniqueId())) {
+                        player.sendMessage(prefix + "§cBitte warte einen Moment.");
+                        return true;
+                    }
+
+                    try {
+                        final Location location = new Location(Bukkit.getWorld(args[1]), Double.parseDouble(args[2]), Double.parseDouble(args[3]), Double.parseDouble(args[4]), player.getLocation().getYaw(), player.getLocation().getPitch());
+
+                        if (!mySQL.spawnerExists(location)) {
+                            player.sendMessage(prefix + "§cDieser Spawner existiert nicht mehr.");
+                            return true;
+                        }
+                        
+                        if (!mySQL.getValue(location, "UUID").equals(player.getUniqueId().toString()) && !player.hasPermission("spawnertools.bypass.tp")) {
+                            player.sendMessage(prefix + "§cDieser Spawner gehört dir nicht.");
+                            return true;
+                        }
+
+                        cooldown.add(player.getUniqueId());
+                        player.teleport(location.add(0.5, 1, 0.5));
+                        player.setNoDamageTicks(100);
+                        player.sendMessage(prefix + "§bDu wurdest teleportiert.");
+                        Bukkit.getScheduler().runTaskLater(SpawnerTools.getPlugin(), () -> cooldown.remove(player.getUniqueId()), 100);
+
+                    } catch (final NumberFormatException exception) {
+                        player.sendMessage(prefix + "§cUngültige Koordinaten.");
+                    }
+                }
+                break;
+                
+            default:
+                this.sendHelp(sender);
+        }
+
         return true;
+    }
+    
+    @Override
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String s, @NotNull String[] args) {
+        final List<String> completion = new ArrayList<>();
+        
+        if (args.length == 1) {
+            StringUtil.copyPartialMatches(args[0], Arrays.asList("list", "tp"), completion);
+            return completion;
+
+        } else if (args.length == 2) {
+            if (args[0].equalsIgnoreCase("list") && sender.hasPermission("spawnertools.list.other")) {
+                return null;
+            }
+        }
+        
+        return Collections.emptyList();
     }
 }

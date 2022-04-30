@@ -16,11 +16,9 @@ public class MySQL {
     private final String host, username, password, database;
     private final int port;
     private Connection connection;
-    
-    private final SpawnerUtil util = SpawnerTools.getPlugin().getUtil();
     private final String prefix = SpawnerTools.getPlugin().prefix;
 
-    public MySQL(String host, int port, String username, String password, String database) {
+    public MySQL(final String host, final int port, final String username, final String password, final String database) {
         this.host = host;
         this.username = username;
         this.password = password;
@@ -30,184 +28,185 @@ public class MySQL {
     
     public void create() {
         try {
-            setConnection(DriverManager.getConnection("jdbc:mysql://" + host + ":" + port, username, password));
-            setUpdate("CREATE DATABASE IF NOT EXISTS `" + database + "`");
-            disconnect();
+            this.setConnection(DriverManager.getConnection("jdbc:mysql://" + host + ":" + port, username, password));
+            this.setUpdate("CREATE DATABASE IF NOT EXISTS `" + database + "`");
+            this.disconnect();
             
-        } catch (SQLException e) {
+        } catch (final SQLException exception) {
             Bukkit.getConsoleSender().sendMessage(prefix + RED + "MySQL Verbindung konnte nicht hergestellt werden. Überprüfe die Config.");
         }
     }
     
     public void connect() {
         try {
-            if (isConnected() && !getConnection().isClosed()) {
+            if (this.isConnected() && !this.getConnection().isClosed()) {
                 Bukkit.getConsoleSender().sendMessage(prefix + YELLOW + "Eine MySQL Verbindung wurde bereits aufgebaut.");
                 return;
             }
-            setConnection(DriverManager.getConnection("jdbc:mysql://" + host + ":" + port + "/" + database, username, password));
+            
+            this.setConnection(DriverManager.getConnection("jdbc:mysql://" + host + ":" + port + "/" + database, username, password));
             Bukkit.getConsoleSender().sendMessage(prefix + GREEN + "MySQL Verbindung wurde aufgebaut.");
 
-        } catch (SQLException e) {
+        } catch (final SQLException exception) {
             Bukkit.getConsoleSender().sendMessage(prefix + RED + "MySQL Verbindung konnte nicht hergestellt werden. Überprüfe die Config.");
         }
     }
 
     public void disconnect() {
-        if (!isConnected()) {
+        if (!this.isConnected()) {
             return;
         }
         
         try {
             connection.close();
-        } catch (SQLException ex) {
-            ex.printStackTrace();
+        } catch (final SQLException exception) {
+            exception.printStackTrace();
         }
     }
 
-    public void setUpdate(String value) {
-        checkConnection();
-        try (PreparedStatement statement = connection.prepareStatement(value)) {
+    public void setUpdate(final String value) {
+        this.checkConnection();
+        
+        try (final PreparedStatement statement = connection.prepareStatement(value)) {
             statement.executeUpdate();
 
-        } catch ( Exception e) {
-            e.printStackTrace();
+        } catch (final Exception exception) {
+            exception.printStackTrace();
         }
     }
     
-    public boolean spawnerExists(Location location) {
-        try (PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
-                .prepareStatement("SELECT * FROM `SpawnerTools_" + SpawnerTools.getPlugin().getServerName() + "` WHERE `Location` = '" + util.toMySQLString(location) + "'");
+    public boolean spawnerExists(final Location location) {
+        try (final PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
+                .prepareStatement("SELECT * FROM `" + SpawnerTools.getPlugin().getServerName() + "` WHERE `Location` = '" + SpawnerTools.getPlugin().getManager().toMySQLString(location) + "'");
 
-             ResultSet resultSet = statement.executeQuery()) {
+             final ResultSet resultSet = statement.executeQuery()) {
 
             if (resultSet.next()) {
                 return resultSet.getString("Location") != null;
             }
 
-        } catch (SQLException ex) {
-            ex.printStackTrace();
+        } catch (final SQLException exception) {
+            exception.printStackTrace();
             Bukkit.getConsoleSender().sendMessage(SpawnerTools.getPlugin().prefix + "§cMySQL-Fehler | Das Plugin sollte nicht reloaded werden. Starte den ganzen Server neu.");
         }
         return false;
     }
 
-    public void createSpawner(Location location, UUID uuid, String type) {
+    public void createSpawner(final Location location, final UUID uuid, final String type) {
         Bukkit.getServer().getScheduler().runTaskAsynchronously(SpawnerTools.getPlugin(), () -> {
-            if (!spawnerExists(location)) {
+            if (this.spawnerExists(location)) return;
 
-                try (PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
-                        .prepareStatement("INSERT INTO `SpawnerTools_" + SpawnerTools.getPlugin().getServerName() + "` (Location, UUID, Type, Spawns) VALUES (?, ?, ?, ?)")) {
+            try (final PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
+                    .prepareStatement("INSERT INTO `" + SpawnerTools.getPlugin().getServerName() + "` (Location, UUID, Type, Spawns) VALUES (?, ?, ?, ?)")) {
 
-                    statement.setString(1, util.toMySQLString(location));
-                    statement.setString(2, uuid.toString());
-                    statement.setString(3, type);
-                    statement.setInt(4, 0);
-                    statement.executeUpdate();
+                statement.setString(1, SpawnerTools.getPlugin().getManager().toMySQLString(location));
+                statement.setString(2, uuid.toString());
+                statement.setString(3, type);
+                statement.setInt(4, 0);
+                statement.executeUpdate();
 
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
+            } catch (final SQLException exception) {
+                exception.printStackTrace();
             }
         });
     }
 
-    public void deleteSpawner(Location location) {
+    public void deleteSpawner(final Location location) {
         Bukkit.getScheduler().runTaskAsynchronously(SpawnerTools.getPlugin(), () -> {
-           if(spawnerExists(location)) {
-               try(PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().connection
-               .prepareStatement("DELETE FROM `SpawnerTools_" + SpawnerTools.getPlugin().getServerName() + "` WHERE `Location` = '" + util.toMySQLString(location) + "'")) {
-                   
-                   statement.executeUpdate();
-                   
-               } catch (SQLException e) {
-                   e.printStackTrace();
-               }
-           }
+            if (!this.spawnerExists(location)) return;
+
+            try (final PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
+                    .prepareStatement("DELETE FROM `" + SpawnerTools.getPlugin().getServerName() + "` WHERE `Location` = '" + SpawnerTools.getPlugin().getManager().toMySQLString(location) + "'")) {
+
+                statement.executeUpdate();
+
+            } catch (final SQLException exception) {
+                exception.printStackTrace();
+            }
         });
     }
     
-    public void setValue(Location location, String type, String value ) {
+    public void setValue(final Location location, final String type, final String value ) {
         Bukkit.getServer().getScheduler().runTaskAsynchronously(SpawnerTools.getPlugin(), () -> {
-            if (spawnerExists(location)) {
+            if (!this.spawnerExists(location)) return;
 
-                try (PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
-                        .prepareStatement("UPDATE `SpawnerTools_" + SpawnerTools.getPlugin().getServerName() + "` SET `" + type + "` = '" + value + "' WHERE `Location` = '" + util.toMySQLString(location) + "'")) {
+            try (final PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
+                    .prepareStatement("UPDATE `" + SpawnerTools.getPlugin().getServerName() + "` SET `" + type + "` = '" + value + "' WHERE `Location` = '" + SpawnerTools.getPlugin().getManager().toMySQLString(location) + "'")) {
 
-                    statement.executeUpdate();
+                statement.executeUpdate();
 
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
+            } catch (final SQLException exception) {
+                exception.printStackTrace();
             }
         });
     }
     
-    public String getValue(Location location, String type ) {
-        if (spawnerExists(location)) {
+    public String getValue(final Location location, final String type ) {
+        if (!this.spawnerExists(location)) return null;
 
-            try (PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
-                    .prepareStatement("SELECT * FROM `SpawnerTools_" + SpawnerTools.getPlugin().getServerName() + "` WHERE `Location` = '" + util.toMySQLString(location) + "'");
-                
-                ResultSet resultSet = statement.executeQuery()) {
-                if (resultSet.next()) {
-                    return resultSet.getString(type);
-                }
+        try (final PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
+                .prepareStatement("SELECT * FROM `" + SpawnerTools.getPlugin().getServerName() + "` WHERE `Location` = '" + SpawnerTools.getPlugin().getManager().toMySQLString(location) + "'");
 
-            } catch (SQLException ex) {
-                ex.printStackTrace();
+             final ResultSet resultSet = statement.executeQuery()) {
+            
+            if (resultSet.next()) {
+                return resultSet.getString(type);
             }
+
+        } catch (final SQLException exception) {
+            exception.printStackTrace();
         }
         return null;
     }
 
-    public List<String> getListValue(UUID uuid, String type ) {
-        List<String> list = new ArrayList<>();
-            try (PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
-                    .prepareStatement("SELECT * FROM `SpawnerTools_" + SpawnerTools.getPlugin().getServerName() + "` WHERE `UUID` = '" + uuid.toString() + "'");
+    public List<String> getListValue(final UUID uuid, final String type ) {
+        final List<String> list = new ArrayList<>();
+        try (final PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
+                .prepareStatement("SELECT * FROM `" + SpawnerTools.getPlugin().getServerName() + "` WHERE `UUID` = '" + uuid.toString() + "'");
 
-                 ResultSet resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
-                    list.add(resultSet.getString(type));
-                }
-                return list;
-                
-            } catch (SQLException ex) {
-                ex.printStackTrace();
+             final ResultSet resultSet = statement.executeQuery()) {
+            
+            while (resultSet.next()) {
+                list.add(resultSet.getString(type));
             }
+            
+            return list;
+
+        } catch (final SQLException exception) {
+            exception.printStackTrace();
+        }
         return null;
     }
     
-    public int getIntValue(Location location, String type) {
-        if (spawnerExists(location)) {
+    public int getIntValue(final Location location, final String type) {
+        if (!this.spawnerExists(location)) return 0;
 
-            try (PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
-                    .prepareStatement("SELECT * FROM `SpawnerTools_" + SpawnerTools.getPlugin().getServerName() + "` WHERE `Location` = '" + util.toMySQLString(location) + "'");
+        try (final PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
+                .prepareStatement("SELECT * FROM `" + SpawnerTools.getPlugin().getServerName() + "` WHERE `Location` = '" + SpawnerTools.getPlugin().getManager().toMySQLString(location) + "'");
 
-                 ResultSet resultSet = statement.executeQuery()) {
-                if (resultSet.next()) {
-                    return resultSet.getInt(type);
-                }
-
-            } catch (SQLException ex) {
-                ex.printStackTrace();
+             final ResultSet resultSet = statement.executeQuery()) {
+            
+            if (resultSet.next()) {
+                return resultSet.getInt(type);
             }
+
+        } catch (final SQLException exception) {
+            exception.printStackTrace();
         }
         return 0;
     }
 
-    public void setIntValue(Location location, String type, int value) {
+    public void setIntValue(final Location location, final String type, final int value) {
         Bukkit.getScheduler().runTaskAsynchronously(SpawnerTools.getPlugin(), () -> {
-            if (spawnerExists(location)) {
+            if (!spawnerExists(location)) return;
 
-                try (PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
-                        .prepareStatement("UPDATE `SpawnerTools_" + SpawnerTools.getPlugin().getServerName() + "` SET `" + type + "` = " + value + " WHERE `Location` = '" + util.toMySQLString(location) + "'")) {
+            try (final PreparedStatement statement = SpawnerTools.getPlugin().getMySQL().getConnection()
+                    .prepareStatement("UPDATE `" + SpawnerTools.getPlugin().getServerName() + "` SET `" + type + "` = " + value + " WHERE `Location` = '" + SpawnerTools.getPlugin().getManager().toMySQLString(location) + "'")) {
 
-                    statement.executeUpdate();
+                statement.executeUpdate();
 
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
+            } catch (final SQLException exception) {
+                exception.printStackTrace();
             }
         });
     }
@@ -215,16 +214,16 @@ public class MySQL {
     private void checkConnection() {
         try {
             if (!isConnected() || !this.connection.isValid(10) || this.connection.isClosed()) connect();
-        } catch ( Exception e ) {
-            e.printStackTrace();
+        } catch (final Exception exception) {
+            exception.printStackTrace();
         }
     }
 
     public boolean isConnected() {
         try {
             return connection != null && !connection.isClosed();
-        } catch (SQLException e) {
-            e.printStackTrace();
+        } catch (final SQLException exception) {
+            exception.printStackTrace();
         }
         return false;
     }
@@ -236,6 +235,4 @@ public class MySQL {
     public void setConnection( Connection connection ) {
         this.connection = connection;
     }
-    
-    
 }

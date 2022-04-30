@@ -9,13 +9,13 @@ import org.bukkit.event.entity.SpawnerSpawnEvent;
 public class SpawnerCountListener implements Listener {
     
     @EventHandler
-    public void onSpawn(SpawnerSpawnEvent event) {
-        Location location = event.getSpawner().getLocation();
-        if(!SpawnerTools.getPlugin().getMySQL().spawnerExists(location)) {
+    public void onSpawn(final SpawnerSpawnEvent event) {
+        final Location location = event.getSpawner().getLocation();
+        if (!SpawnerTools.getPlugin().getMySQL().spawnerExists(location)) {
             return;
         }
         
-        int newValue = SpawnerTools.getPlugin().getMySQL().getIntValue(location, "Spawns") +1;
+        final int newValue = SpawnerTools.getPlugin().getMySQL().getIntValue(location, "Spawns") +1;
         SpawnerTools.getPlugin().getMySQL().setIntValue(location, "Spawns", newValue);
     }
 }
