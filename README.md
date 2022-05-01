@@ -6,7 +6,7 @@ Durch Rechtsklicken auf Spawner öffnet sich ein Menü in dem man den Spawner ab
 Man bekommt Spawner + SpawnEi ins Inventar
 
 + MySQL
-+ PlotSquared Support
++ PlotSquared (v6) Support
 + Spawner-Besitzer
 + Anzahl der gespawnten Mobs (Statistik)
 + Essentials /Spawner support
