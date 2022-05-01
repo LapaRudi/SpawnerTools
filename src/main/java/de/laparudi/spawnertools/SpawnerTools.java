@@ -46,6 +46,7 @@ public final class SpawnerTools extends JavaPlugin {
         this.initialize();
         this.loadConfig();
         this.connectMySQL();
+        if (mySQL == null) return;
         this.setPlotSquared();
         this.loadListeners();
         
